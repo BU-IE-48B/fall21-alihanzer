@@ -12,5 +12,5 @@
 
 ### Websites:
 
-* https://www.linkedin.com/in/alihan-zer/
-* https://github.com/alihanzer
+* [LinkedIn](https://www.linkedin.com/in/alihan-zer/)
+* [GitHub](https://github.com/alihanzer)
