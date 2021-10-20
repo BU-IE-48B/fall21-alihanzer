@@ -9,3 +9,8 @@
 ### E-mail Address: alihanzer@gmail.com
 
 ### Phone Number: +90 507 736 8859
+
+### Websites:
+
+* https://www.linkedin.com/in/alihan-zer/
+* https://github.com/alihanzer
