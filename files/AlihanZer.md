@@ -1,6 +1,6 @@
 # Alihan Zer
 
-<img src="pp.jpg" alt="Alihan Zer" width="150" style="float: left"/>
+<img src="pp.jpg" alt="Alihan Zer" width="100" style="float: left"/>
 
 ### Student ID: 2017402156
 
