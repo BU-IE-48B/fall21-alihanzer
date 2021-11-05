@@ -1,0 +1,368 @@
+---
+title: "IE48B - HW1"
+author: "Alihan Zer"
+date: "05 11 2021"
+output: html_document
+---
+
+In this homework, we are asked to work with the gesture recognition dataset. In order to visualize this dataset, preprocessing is required.
+
+This dataset consists of 3 distinct datasets. One for each coordinate. Each of these datasets also consists of 316 features. First of these features is the class attribute, in other words the shape. The other features are the readings of accelerometer.
+
+```{r include=FALSE}
+require(data.table)
+require(ggplot2)
+require(repr)
+require(rpart)
+require(rattle)
+require(TSrepr)
+require(zoo)
+
+
+x_cor = fread(sprintf("C:/users/aliha/Desktop/uWaveGestureLibrary_X_TRAIN.txt"))
+y_cor = fread(sprintf("C:/users/aliha/Desktop/uWaveGestureLibrary_Y_TRAIN.txt"))
+z_cor = fread(sprintf("C:/users/aliha/Desktop/uWaveGestureLibrary_Z_TRAIN.txt"))
+```
+
+Also, we can create additional features for each dataset. Since these will be time series, addition of time index can be useful.
+
+Coverting the class attribute as class helps us to categorize these datasets, as well.
+
+```{r}
+x_cor[,id:=1:.N]
+setnames(x_cor,'V1','class')
+x_cor[,class:=as.character(class)]
+x_cor=melt(x_cor,id.vars=c('id','class'))
+x_cor[,time:=as.numeric(gsub("\\D", "", variable))-1]
+x_cor=x_cor[,list(id,class,time,value)]
+x_cor=x_cor[order(id,time)]
+
+y_cor[,id:=1:.N]
+setnames(y_cor,'V1','class')
+y_cor[,class:=as.character(class)]
+y_cor=melt(y_cor,id.vars=c('id','class'))
+y_cor[,time:=as.numeric(gsub("\\D", "", variable))-1]
+y_cor=y_cor[,list(id,class,time,value)]
+y_cor=y_cor[order(id,time)]
+
+z_cor[,id:=1:.N]
+setnames(z_cor,'V1','class')
+z_cor[,class:=as.character(class)]
+z_cor=melt(z_cor,id.vars=c('id','class'))
+z_cor[,time:=as.numeric(gsub("\\D", "", variable))-1]
+z_cor=z_cor[,list(id,class,time,value)]
+z_cor=z_cor[order(id,time)]
+```
+
+
+In order to transform these readings into actual locations, first their speeds needs to be calculated. This can be performed easily by adding them cumulatively. It is known that the first velocity and the first location will be equal to zero.
+
+```{r}
+x_cor[time == 1, velocity:=0]
+y_cor[time == 1, velocity:=0]
+z_cor[time == 1, velocity:=0]
+
+x_cor[time == 1, position:=0]
+y_cor[time == 1, position:=0]
+z_cor[time == 1, position:=0]
+
+```
+
+In order to decrease the runtime, I am only going to create one dataset for each class. Classes of each readings can be found via this code:
+
+```{r}
+x_cor[class == 1,]
+```
+
+The 11th id has the class 1. Thus to examine class 1, we can calculate the velocity and the position for only id 11.
+
+Velocity can be calculated by the summation of the previous velocity value and the current acceleration value.
+
+Calculation of the position requires an extra step. Since the velocity is not constant, the average of the current and the previous velocity value should be added into the previous position
+
+## Class 1
+
+```{r}
+
+for(i in (3152:3465)){
+  x_cor$velocity[i] = x_cor$velocity[i-1] + x_cor$value[i-1] 
+  y_cor$velocity[i] = y_cor$velocity[i-1] + y_cor$value[i-1] 
+  z_cor$velocity[i] = z_cor$velocity[i-1] + z_cor$value[i-1] 
+}
+
+for(i in (3152:3465)){
+  x_cor$position[i] = x_cor$position[i-1] + ((x_cor$velocity[i] + x_cor$velocity[i-1])/2)
+  y_cor$position[i] = y_cor$position[i-1] + ((y_cor$velocity[i] + y_cor$velocity[i-1])/2)
+  z_cor$position[i] = z_cor$position[i-1] + ((z_cor$velocity[i] + z_cor$velocity[i-1])/2)
+}
+
+class_1 = data.table(x_cor$position[3151:3465],y_cor$position[3151:3465],z_cor$position[3151:3465])
+colnames(class_1) = c("X Coordinate", "Y Coordinate", "Z Coordinate")
+
+class_1[,class:=1]
+class_1[,time:=(1:315)]
+
+class_1
+```
+
+
+## Class 2
+
+```{r}
+for(i in (4097: 4410)){
+  x_cor$velocity[i] = x_cor$velocity[i-1] + x_cor$value[i-1] 
+  y_cor$velocity[i] = y_cor$velocity[i-1] + y_cor$value[i-1] 
+  z_cor$velocity[i] = z_cor$velocity[i-1] + z_cor$value[i-1] 
+}
+
+for(i in (4097: 4410)){
+  x_cor$position[i] = x_cor$position[i-1] + ((x_cor$velocity[i] + x_cor$velocity[i-1])/2)
+  y_cor$position[i] = y_cor$position[i-1] + ((y_cor$velocity[i] + y_cor$velocity[i-1])/2)
+  z_cor$position[i] = z_cor$position[i-1] + ((z_cor$velocity[i] + z_cor$velocity[i-1])/2)
+}
+
+class_2 = data.table(x_cor$position[4096: 4410],y_cor$position[4096: 4410],z_cor$position[4096: 4410])
+colnames(class_2) = c("X Coordinate", "Y Coordinate", "Z Coordinate")
+
+class_2[,class:=2]
+class_2[,time:=(1:315)]
+
+class_2
+```
+
+
+## Class 3
+
+```{r}
+for(i in (947:1260)){
+  x_cor$velocity[i] = x_cor$velocity[i-1] + x_cor$value[i-1] 
+  y_cor$velocity[i] = y_cor$velocity[i-1] + y_cor$value[i-1] 
+  z_cor$velocity[i] = z_cor$velocity[i-1] + z_cor$value[i-1] 
+}
+
+for(i in (947:1260)){
+  x_cor$position[i] = x_cor$position[i-1] + ((x_cor$velocity[i] + x_cor$velocity[i-1])/2)
+  y_cor$position[i] = y_cor$position[i-1] + ((y_cor$velocity[i] + y_cor$velocity[i-1])/2)
+  z_cor$position[i] = z_cor$position[i-1] + ((z_cor$velocity[i] + z_cor$velocity[i-1])/2)
+}
+
+class_3 = data.table(x_cor$position[946:1260],y_cor$position[946:1260],z_cor$position[946:1260])
+colnames(class_3) = c("X Coordinate", "Y Coordinate", "Z Coordinate")
+
+class_3[,class:=3]
+class_3[,time:=(1:315)]
+  
+class_3
+
+```
+
+
+## Class 4
+
+```{r}
+for(i in (1262:1575)){
+  x_cor$velocity[i] = x_cor$velocity[i-1] + x_cor$value[i-1] 
+  y_cor$velocity[i] = y_cor$velocity[i-1] + y_cor$value[i-1] 
+  z_cor$velocity[i] = z_cor$velocity[i-1] + z_cor$value[i-1] 
+}
+
+for(i in (1262:1575)){
+  x_cor$position[i] = x_cor$position[i-1] + ((x_cor$velocity[i] + x_cor$velocity[i-1])/2)
+  y_cor$position[i] = y_cor$position[i-1] + ((y_cor$velocity[i] + y_cor$velocity[i-1])/2)
+  z_cor$position[i] = z_cor$position[i-1] + ((z_cor$velocity[i] + z_cor$velocity[i-1])/2)
+}
+
+class_4 = data.table(x_cor$position[1261:1575],y_cor$position[1261:1575],z_cor$position[1261:1575])
+colnames(class_4) = c("X Coordinate", "Y Coordinate", "Z Coordinate")
+
+class_4[,class:=4]
+class_4[,time:=(1:315)]
+
+class_4
+
+```
+
+
+## Class 5
+
+```{r}
+
+for(i in (317:630)){
+  x_cor$velocity[i] = x_cor$velocity[i-1] + x_cor$value[i-1] 
+  y_cor$velocity[i] = y_cor$velocity[i-1] + y_cor$value[i-1] 
+  z_cor$velocity[i] = z_cor$velocity[i-1] + z_cor$value[i-1] 
+}
+
+for(i in (317:630)){
+  x_cor$position[i] = x_cor$position[i-1] + ((x_cor$velocity[i] + x_cor$velocity[i-1])/2)
+  y_cor$position[i] = y_cor$position[i-1] + ((y_cor$velocity[i] + y_cor$velocity[i-1])/2)
+  z_cor$position[i] = z_cor$position[i-1] + ((z_cor$velocity[i] + z_cor$velocity[i-1])/2)
+}
+
+class_5 = data.table(x_cor$position[316:630],y_cor$position[316:630],z_cor$position[316:630])
+colnames(class_5) = c("X Coordinate", "Y Coordinate", "Z Coordinate")
+
+class_5[,class:=5]
+class_5[,time:=(1:315)]
+
+class_5
+
+```
+
+
+## Class 6
+
+
+```{r}
+for(i in (2:315)){
+  x_cor$velocity[i] = x_cor$velocity[i-1] + x_cor$value[i-1] 
+  y_cor$velocity[i] = y_cor$velocity[i-1] + y_cor$value[i-1] 
+  z_cor$velocity[i] = z_cor$velocity[i-1] + z_cor$value[i-1] 
+  }
+
+for(i in (2:315)){
+  x_cor$position[i] = x_cor$position[i-1] + ((x_cor$velocity[i] + x_cor$velocity[i-1])/2)
+  y_cor$position[i] = y_cor$position[i-1] + ((y_cor$velocity[i] + y_cor$velocity[i-1])/2)
+  z_cor$position[i] = z_cor$position[i-1] + ((z_cor$velocity[i] + z_cor$velocity[i-1])/2)
+}
+
+class_6 = data.table(x_cor$position[1:315],y_cor$position[1:315],z_cor$position[1:315])
+colnames(class_6) = c("X Coordinate", "Y Coordinate", "Z Coordinate")
+
+class_6[,class:=6]
+class_6[,time:=(1:315)]
+
+class_6
+```
+
+## Class 7
+
+```{r}
+for(i in (1892: 2205)){
+  x_cor$velocity[i] = x_cor$velocity[i-1] + x_cor$value[i-1] 
+  y_cor$velocity[i] = y_cor$velocity[i-1] + y_cor$value[i-1] 
+  z_cor$velocity[i] = z_cor$velocity[i-1] + z_cor$value[i-1] 
+}
+
+for(i in (1892: 2205)){
+  x_cor$position[i] = x_cor$position[i-1] + ((x_cor$velocity[i] + x_cor$velocity[i-1])/2)
+  y_cor$position[i] = y_cor$position[i-1] + ((y_cor$velocity[i] + y_cor$velocity[i-1])/2)
+  z_cor$position[i] = z_cor$position[i-1] + ((z_cor$velocity[i] + z_cor$velocity[i-1])/2)
+}
+
+class_7 = data.table(x_cor$position[1891: 2205],y_cor$position[1891: 2205],z_cor$position[1891: 2205])
+colnames(class_7) = c("X Coordinate", "Y Coordinate", "Z Coordinate")
+
+class_7[,class:=7]
+class_7[,time:=(1:315)]
+
+class_7
+```
+
+
+
+## Class 8
+
+```{r}
+
+for(i in (1577:1890)){
+  x_cor$velocity[i] = x_cor$velocity[i-1] + x_cor$value[i-1] 
+  y_cor$velocity[i] = y_cor$velocity[i-1] + y_cor$value[i-1] 
+  z_cor$velocity[i] = z_cor$velocity[i-1] + z_cor$value[i-1] 
+}
+
+for(i in (1577:1890)){
+  x_cor$position[i] = x_cor$position[i-1] + ((x_cor$velocity[i] + x_cor$velocity[i-1])/2)
+  y_cor$position[i] = y_cor$position[i-1] + ((y_cor$velocity[i] + y_cor$velocity[i-1])/2)
+  z_cor$position[i] = z_cor$position[i-1] + ((z_cor$velocity[i] + z_cor$velocity[i-1])/2)
+}
+
+class_8 = data.table(x_cor$position[1576:1890],y_cor$position[1576:1890],z_cor$position[1576:1890])
+colnames(class_8) = c("X Coordinate", "Y Coordinate", "Z Coordinate")
+
+class_8[,class:=8]
+class_8[,time:=(1:315)]
+
+class_8
+```
+
+# Visualization
+
+## Class 1
+
+```{r}
+library("plot3D")
+
+lines3D(x = class_1$`X Coordinate`, y = class_1$`Y Coordinate`, z = class_1$`Z Coordinate`, phi = 30, lwd = 4, type = "l")
+```
+## Class 2
+
+```{r}
+lines3D(x = class_2$`X Coordinate`, y = class_2$`Y Coordinate`, z = class_2$`Z Coordinate`, phi = 0, lwd = 4, type = "l")
+```
+## Class 3
+
+```{r}
+lines3D(x = class_3$`X Coordinate`, y = class_3$`Y Coordinate`, z = class_3$`Z Coordinate`, phi = 0, lwd = 4, type = "l")
+```
+## Class 4
+
+```{r}
+lines3D(x = class_4$`X Coordinate`, y = class_4$`Y Coordinate`, z = class_4$`Z Coordinate`, phi = 0, lwd = 4, type = "l")
+```
+## Class 5
+
+```{r}
+lines3D(x = class_5$`X Coordinate`, y = class_5$`Y Coordinate`, z = class_5$`Z Coordinate`, phi = 0, lwd = 4, type = "l")
+```
+## Class 6
+
+```{r}
+lines3D(x = class_6$`X Coordinate`, y = class_6$`Y Coordinate`, z = class_6$`Z Coordinate`, phi = 0, lwd = 4, type = "l")
+```
+## Class 7
+
+```{r}
+lines3D(x = class_7$`X Coordinate`, y = class_7$`Y Coordinate`, z = class_7$`Z Coordinate`, phi = 0, lwd = 4, type = "l")
+```
+
+
+## Class 8
+
+```{r}
+lines3D(x = class_8$`X Coordinate`, y = class_8$`Y Coordinate`, z = class_8$`Z Coordinate`, phi = 0, lwd = 4, type = "l")
+```
+
+# Representations
+
+To make things easier, only the X components will be used from now on.
+
+```{r}
+all_classes = data.table(class_1)
+all_classes =rbind(all_classes, class_2, class_3, class_4, class_5, class_6, class_7, class_8)
+
+
+ggplot(all_classes, aes(time,`X Coordinate`)) + geom_line() +
+     facet_wrap(~class)
+
+```
+Because these datasets contain only one instance, it visualizes poorly.    
+
+
+```{r}
+require(repr)
+require(rpart)
+require(rattle)
+require(TSrepr)
+require(zoo)
+require(Rcpp)
+
+segment_length=15
+data_ts=all_classes[class == 5]$`X Coordinate`
+
+paa_rep=repr_paa(data_ts, segment_length, meanC)
+
+plot(paa_rep,type='l')
+
+```
+
