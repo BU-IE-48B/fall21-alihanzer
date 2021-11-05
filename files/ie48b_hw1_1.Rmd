@@ -295,31 +295,37 @@ library("plot3D")
 
 lines3D(x = class_1$`X Coordinate`, y = class_1$`Y Coordinate`, z = class_1$`Z Coordinate`, phi = 30, lwd = 4, type = "l")
 ```
+
 ## Class 2
 
 ```{r}
 lines3D(x = class_2$`X Coordinate`, y = class_2$`Y Coordinate`, z = class_2$`Z Coordinate`, phi = 0, lwd = 4, type = "l")
 ```
+
 ## Class 3
 
 ```{r}
 lines3D(x = class_3$`X Coordinate`, y = class_3$`Y Coordinate`, z = class_3$`Z Coordinate`, phi = 0, lwd = 4, type = "l")
 ```
+
 ## Class 4
 
 ```{r}
 lines3D(x = class_4$`X Coordinate`, y = class_4$`Y Coordinate`, z = class_4$`Z Coordinate`, phi = 0, lwd = 4, type = "l")
 ```
+
 ## Class 5
 
 ```{r}
 lines3D(x = class_5$`X Coordinate`, y = class_5$`Y Coordinate`, z = class_5$`Z Coordinate`, phi = 0, lwd = 4, type = "l")
 ```
+
 ## Class 6
 
 ```{r}
 lines3D(x = class_6$`X Coordinate`, y = class_6$`Y Coordinate`, z = class_6$`Z Coordinate`, phi = 0, lwd = 4, type = "l")
 ```
+
 ## Class 7
 
 ```{r}
