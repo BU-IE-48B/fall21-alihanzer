@@ -1,0 +1,453 @@
+---
+title: "IE48B - HW3"
+author: "Alihan Zer"
+date: "12 12 2021"
+output: html_document
+---
+
+In this homework, we are expected to compare NN-Classifier methods as well as performing parameter tuning. To do so, I have worked on 5 different datasets. These are ArrowHead, ECG200, Ham, Plane, and Trace.
+
+```{r include=FALSE}
+require(data.table)
+require(ggplot2)
+require(repr)
+require(rpart)
+require(rattle)
+require(TSrepr)
+require(zoo)
+require(TSdist)
+require(dtw)
+require(TunePareto)
+require(readr)
+
+```
+
+```{r include=FALSE}
+setwd("C:/Users/aliha/Documents/IE48B - HW3")
+
+nn_classify_cv = function(dist_matrix, train_class, test_indices, k){
+    test_distances_to_train=dist_matrix[test_indices,]
+    test_distances_to_train=test_distances_to_train[,-test_indices]
+    train_class=train_class[-test_indices]
+    ordered_indices=apply(test_distances_to_train,1,order)
+    if(k==1){
+        nearest_class=as.numeric(trainclass[as.numeric(ordered_indices[1,])])
+        nearest_class=data.table(id=test_indices,nearest_class)
+    } else {
+        nearest_class=apply(ordered_indices[1:k,],2,function(x) {trainclass[x]})
+        nearest_class=data.table(id=test_indices,t(nearest_class))
+    }
+    
+    long_nn_class=melt(nearest_class,'id')
+
+    class_counts=long_nn_class[,.N,list(id,value)]
+    class_counts[,predicted_prob:=N/k]
+    wide_class_prob_predictions=dcast(class_counts,id~value,value.var='predicted_prob')
+    wide_class_prob_predictions[is.na(wide_class_prob_predictions)]=0
+    class_predictions=class_counts[,list(predicted=value[which.max(N)]),by=list(id)]
+    
+    
+    return(list(prediction=class_predictions,prob_estimates=wide_class_prob_predictions))
+    
+
+}
+
+tablemaker = function(dist_files, trainclass, test_indices, k_levels){
+#  k_levels = c(1,3,5)
+  approach_name = c("DTW, Window type = Itakura, Window Size = 10",
+                    "DTW, Window type = Itakura, Window Size = 20",
+                    "DTW, Raw",
+                    "DTW, Window type = Sakoechiba, Window Size = 10",
+                    "DTW, Window type = Sakoechiba, Window Size = 20",
+                    "ERP, Gap Penalty = 0.5",
+                    "ERP, Gap Penalty = 1",
+                    "Euclidean Distance",
+                    "LCSS, epsilon = 0.05",
+                    "LCSS, epsilon = 0.1")
+  result=vector('list',length(dist_files)*nof_rep*n_fold*length(k_levels))
+  iter=1
+  for(m in 1:length(dist_files)){ 
+    print(dist_files[m])
+    dist_mat=as.matrix(fread(dist_files[m],header=FALSE))
+    for(i in 1:nof_rep){
+      this_fold=cv_indices[[i]]
+      for(j in 1:n_fold){
+        test_indices=this_fold[[j]]
+        for(k in 1:length(k_levels)){
+          current_k=k_levels[k]
+          current_fold=nn_classify_cv(dist_mat,trainclass,test_indices,k=current_k)
+          accuracy=sum(trainclass[test_indices]==current_fold$prediction$predicted)/length(test_indices)
+          tmp=data.table(approach=approach_name[m],repid=i,foldid=j,
+                         k=current_k,acc=accuracy)
+          result[[iter]]=tmp
+          iter=iter+1
+          
+        }
+        
+      }
+      
+    }   
+    
+  }
+  
+  overall_results=rbindlist(result)
+  summarized_results=overall_results[,list(avg_acc=mean(acc),sdev_acc=sd(acc),result_count=.N),by=list(approach,k)]
+  return(summarized_results[order(-avg_acc)])
+}
+
+traindata_reader = function(tsdata){
+  setwd("C:/Users/aliha/Documents/IE48B - HW3")
+  current_folder = getwd()
+  dataset=tsdata
+
+  train_data_path=sprintf('%s/%s_TRAIN.txt',current_folder,dataset)
+
+  traindata=as.matrix(fread(train_data_path))
+
+  trainclass=traindata[,1]
+  traindata=traindata[,2:ncol(traindata)]
+  return(traindata)
+}
+
+trainclass_reader = function(tsdata){
+  setwd("C:/Users/aliha/Documents/IE48B - HW3")
+  current_folder = getwd()
+  dataset=tsdata
+
+  train_data_path=sprintf('%s/%s_TRAIN.txt',current_folder,dataset)
+
+  traindata=as.matrix(fread(train_data_path))
+
+  trainclass=traindata[,1]
+  traindata=traindata[,2:ncol(traindata)]
+  return(trainclass)
+}
+
+paa = function(selected_series, segment_length, traindata){
+  paa_rep=repr_paa(traindata, segment_length, meanC)
+  plot(paa_rep,type='l', main = segment_length)
+}
+
+k_levels= c(1,3,5)
+ts_datasets = c('ArrowHead', 'ECG200', 'Ham', 'Plane', 'Trace')
+large_number=10000
+dist_path=getwd()
+
+```
+
+
+
+In order to make computaions later, first we need to create new datasets that holds distances for each method.
+
+```{r eval=FALSE, warning=FALSE, include=FALSE}
+
+
+
+for(datasets in ts_datasets){
+  
+train_data_path=sprintf('%s/%s_TRAIN.txt',dist_path,datasets)
+traindata=as.matrix(fread(train_data_path))
+
+dist_euc=as.matrix(dist(traindata))
+diag(dist_euc)=large_number
+fwrite(dist_euc,sprintf('%s/distances/%s_euc_dist.csv',dist_path, datasets),col.names=F)
+
+dist_lcss = TSDatabaseDistances(traindata,distance='lcss',epsilon=0.05)
+dist_lcss=as.matrix(dist_lcss)
+diag(dist_lcss)=large_number
+fwrite(dist_lcss,sprintf('%s/distances/%s_lcss_005.csv',dist_path, datasets),col.names=F)
+
+dist_lcss = TSDatabaseDistances(traindata,distance='lcss',epsilon=0.1)
+dist_lcss=as.matrix(dist_lcss)
+diag(dist_lcss)=large_number
+fwrite(dist_lcss,sprintf('%s/distances/%s_lcss_01.csv',dist_path, datasets),col.names=F)
+
+dist_erp=TSDatabaseDistances(traindata,distance='erp',g=0.5)
+dist_erp=as.matrix(dist_erp)
+diag(dist_erp)=large_number
+fwrite(dist_erp,sprintf('%s/distances/%s_erp_gap_005.csv',dist_path, datasets),col.names=F)
+                   
+dist_erp=TSDatabaseDistances(traindata,distance='erp',g=1)
+dist_erp=as.matrix(dist_erp)
+diag(dist_erp)=large_number
+fwrite(dist_erp,sprintf('%s/distances/%s_erp_gap_01.csv',dist_path, datasets),col.names=F)
+
+}
+
+for(datasets in ts_datasets){
+  
+train_data_path=sprintf('%s/%s_TRAIN.txt',dist_path,datasets)
+traindata=as.matrix(fread(train_data_path))
+
+dist_dtw=as.matrix(dtwDist(traindata))
+diag(dist_dtw)=large_number
+fwrite(dist_dtw,sprintf('%s/distances/%s_dtw_raw.csv',dist_path, datasets),col.names=F)
+
+dist_dtw=as.matrix(dtwDist(traindata,window.type='sakoechiba',window.size=10))
+diag(dist_dtw)=large_number
+fwrite(dist_dtw,sprintf('%s/distances/%s_dtw_sakoe_10.csv',dist_path, datasets),col.names=F)
+
+dist_dtw=as.matrix(dtwDist(traindata,window.type='sakoechiba',window.size=20))
+diag(dist_dtw)=large_number
+fwrite(dist_dtw,sprintf('%s/distances/%s_dtw_sakoe_20.csv',dist_path, datasets),col.names=F) 
+
+dist_dtw=as.matrix(dtwDist(traindata,window.type='itakura',window.size=10))
+diag(dist_dtw)=large_number
+fwrite(dist_dtw,sprintf('%s/distances/%s_dtw_itakura_10.csv',dist_path, datasets),col.names=F)
+
+dist_dtw=as.matrix(dtwDist(traindata,window.type='itakura',window.size=20))
+diag(dist_dtw)=large_number
+fwrite(dist_dtw,sprintf('%s/distances/%s_dtw_itakura_20.csv',dist_path, datasets),col.names=F) 
+}
+
+```
+
+# Pipeline
+
+The pipeline can be categorized as the following.
+
+KNN, Euc, k = 1
+KNN, Euc, k = 3
+KNN, Euc, k = 5
+
+KNN, DTW, k = 1
+KNN, DTW, k = 3
+KNN, DTW, k = 5
+
+KNN, DTW, Sakoe, window = 10 ,k = 1
+KNN, DTW, Sakoe, window = 10 ,k = 3
+KNN, DTW, Sakoe, window = 10 ,k = 5
+
+KNN, DTW, Sakoe, window = 20 ,k = 1
+KNN, DTW, Sakoe, window = 20 ,k = 3
+KNN, DTW, Sakoe, window = 20 ,k = 5
+
+KNN, DTW, Itakura, window = 10 ,k = 1
+KNN, DTW, Itakura, window = 10 ,k = 3
+KNN, DTW, Itakura, window = 10 ,k = 5
+
+KNN, DTW, Itakura, window = 20 ,k = 1
+KNN, DTW, Itakura, window = 20 ,k = 3
+KNN, DTW, Itakura, window = 20 ,k = 5
+
+KNN, LCSS, epsilon = 0.05, k = 1
+KNN, LCSS, epsilon = 0.05, k = 3
+KNN, LCSS, epsilon = 0.05, k = 5
+
+KNN, LCSS, epsilon = 0.1, k = 1
+KNN, LCSS, epsilon = 0.1, k = 3
+KNN, LCSS, epsilon = 0.1, k = 5
+
+KNN, ERP, gap = 0.5, k = 1
+KNN, ERP, gap = 0.5, k = 3
+KNN, ERP, gap = 0.5, k = 5
+
+KNN, ERP, gap = 1, k = 1
+KNN, ERP, gap = 1, k = 3
+KNN, ERP, gap = 1, k = 5
+
+
+
+# Arrow Head
+
+```{r}
+traindata = traindata_reader('ArrowHead')
+trainclass = trainclass_reader('ArrowHead')
+
+```
+
+## Visualization
+
+```{r}
+paa(1, 5, traindata)
+```
+```{r}
+paa(1, 10, traindata)
+
+```
+
+```{r}
+paa(1, 15, traindata)
+
+```
+
+
+```{r}
+
+set.seed(2017402156)
+nof_rep=5
+n_fold=10
+cv_indices=generateCVRuns(trainclass, ntimes =nof_rep, nfold = n_fold, 
+                          leaveOneOut = FALSE, stratified = TRUE)
+
+arrow_cv_indices = cv_indices
+
+dist_folder=sprintf('%s/distances',dist_path)
+dist_files=list.files(dist_folder, full.names=T)
+
+
+dist_files_ArrowHead = dist_files[1:10]
+dist_files_ECG200 = dist_files[11:20]
+dist_files_Ham = dist_files[21:30]
+dist_files_Plane = dist_files[31:40]
+dist_files_Trace = dist_files[41:50]
+
+
+```
+
+
+```{r}
+arrowhead_table = tablemaker(dist_files_ArrowHead, trainclass, test_indices = 1:5, k_levels)
+arrowhead_table
+
+```
+
+Please note that this table was created for ArrowHead dataset. For the selected dataset, the best approach seems to use DTW method without additional parameters. 
+
+
+# ECG200
+
+## Visualization
+
+```{r}
+traindata = traindata_reader('ECG200')
+trainclass = trainclass_reader('ECG200')
+paa(1,5,traindata)
+```
+```{r}
+paa(1,10,traindata)
+```
+```{r}
+paa(1,15,traindata)
+```
+
+
+```{r}
+
+set.seed(2017402156)
+cv_indices=generateCVRuns(trainclass, ntimes =nof_rep, nfold = n_fold, 
+                          leaveOneOut = FALSE, stratified = TRUE)
+ecg_cv_indices = cv_indices
+
+
+```
+
+
+
+```{r}
+
+ecg_table = tablemaker(dist_files_ECG200, trainclass, test_indices = 1:5, k_levels)
+ecg_table
+
+```
+
+Please note that this table was created for ECG200 dataset. For the selected dataset, the best approach seems to use DTW method with 5 nearest neighbours without additional parameters. 
+
+
+# Ham
+
+## Visualization
+
+```{r}
+traindata = traindata_reader('Ham')
+trainclass = trainclass_reader('Ham')
+paa(1, 5, traindata)
+
+```
+```{r}
+paa(1,10,traindata)
+```
+```{r}
+paa(1,15,traindata)
+```
+
+
+```{r}
+set.seed(2017402156)
+cv_indices=generateCVRuns(trainclass, ntimes =nof_rep, nfold = n_fold, 
+                          leaveOneOut = FALSE, stratified = TRUE)
+ham_cv_indices = cv_indices
+```
+
+
+```{r}
+
+ham_table = tablemaker(dist_files_Ham, trainclass, test_indices = 1:5, k_levels)
+ham_table
+
+```
+
+Please note that this table was created for Ham dataset. For the selected dataset, the best approach seems to use euclidean distance approach with 1 nearest neighbour. Additionally, it can be seen that Sakoechiba approach is more successful compared to the Itakura approach.
+
+# Plane
+
+## Visualization
+
+```{r}
+traindata = traindata_reader('Plane')
+trainclass = trainclass_reader('Plane')
+paa(1,5,traindata)
+```
+```{r}
+paa(1,10,traindata)
+```
+```{r}
+paa(1,15,traindata)
+```
+
+
+```{r}
+
+set.seed(2017402156)
+cv_indices=generateCVRuns(trainclass, ntimes =nof_rep, nfold = n_fold, 
+                          leaveOneOut = FALSE, stratified = TRUE)
+plane_cv_indices = cv_indices
+```
+
+
+```{r}
+
+plane_table = tablemaker(dist_files_Plane, trainclass, test_indices = 1:5, k_levels)
+plane_table
+
+```
+
+Please note that this table was created for Plane dataset. For the selected dataset, the best approach seems to use euclidean distance with 5 nearest neighbours. 
+
+
+# Trace
+
+## Visualization
+
+```{r}
+traindata = traindata_reader('Trace')
+trainclass = trainclass_reader('Trace')
+paa(1,5,traindata)
+
+```
+```{r}
+paa(1,10,traindata)
+```
+```{r}
+paa(1,15,traindata)
+```
+
+
+```{r}
+
+set.seed(2017402156)
+cv_indices=generateCVRuns(trainclass, ntimes =nof_rep, nfold = n_fold, 
+                          leaveOneOut = FALSE, stratified = TRUE)
+```
+
+
+```{r}
+
+trace_table = tablemaker(dist_files_Trace,trainclass, test_indices = 1:5, k_levels)
+trace_table
+
+```
+
+Please note that this table was created for Trace dataset. For the selected dataset, the best approach seems to use DTW method with window type Sakoechiba and window size 10, and using the nearest three neighbours. 
+
+
