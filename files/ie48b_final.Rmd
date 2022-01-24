@@ -1,0 +1,132 @@
+---
+title: "IE48B - Final"
+author: "Alihan Zer"
+date: "24 01 2022"
+output: html_document
+---
+
+In this final, we are asked to predict the solar predictions for the given dataset.
+
+```{r include=FALSE}
+require(ggplot2)
+require(skimr)
+require(GGally)
+require(data.table)
+require(lubridate)
+library(forecast)
+require(rpart)
+require(rattle)
+require(readr)
+require(Metrics)
+```
+
+```{r}
+df <- read_csv("production_with_weather_data.csv")
+df = data.table(df)
+
+wmape <- function(actual, predicted){
+  return(sum(abs(actual - predicted), na.rm=TRUE) / sum(abs(actual)))
+}
+```
+
+After reading and converting into a data.table, some manipulations are needed. Specifically, the trend column should be added. Also, date column should be converted into more compact form, and day and month informations are required to be added.
+
+```{r}
+df[,trend:=1:.N]
+df[,datetime:=ymd(date) + dhours(hour)]
+df[,w_day:=as.character(wday(datetime))]
+df[,mon:=as.character(month(datetime))]
+
+```
+
+```{r}
+ggplot(df, aes(x=datetime, y=production)) + geom_line()
+```
+
+Because there are many entries, this plot seems noisy. However, some comments still can be done. For instance, it can be seen that a drop is observed around january every year. Also, the production values are relatively higher around july.
+
+Now, a model can be deployed with using only time variables.
+
+```{r}
+lm_base <- lm(production~trend+ w_day + mon + as.factor(hour), df)
+summary(lm_base)
+```
+
+As it can be seen hour = 0, mon = 1 and w_day = 1 are missing. This is because, these columns are linearly dependent with other columns. The significant values are denoted with ***.
+
+The adjusted-R^2 0.8224. Now, let's see if we can improve this value by adding other predictors.
+
+```{r}
+df[, actual := production]
+df[, predicted := predict(lm_base, df)]
+ggplot(df[date=='2019-09-01'], aes(x=datetime)) + geom_line(aes(y = production, color = 'real'))+geom_line(aes(y=predicted, color = 'predicted'))
+```
+
+This plot is the plot for a specific day. The predictions do not deviate much.
+
+Now, the regression tree can be used to generate new features.
+
+```{r}
+df[,residual := actual - predicted]
+
+fit_res_tree = rpart(residual~.-(date+actual+predicted+production),control = rpart.control(maxdepth = 4), data = df)
+fancyRpartPlot(fit_res_tree)
+```
+
+This plot shows several important comparisons. For instance, the hour value being smaller than 16 affects the model. Also, the weather conditions (which can be derived with the month values) affects the model as well. 
+
+This tree can also be used to generate multiple constraints. With further analysis, it can be seen that the 7th box needs the most attention (i.e., it has the most total error.). 
+
+```{r}
+df[, is_winter:= as.numeric(mon==12 | mon==1)]
+df[, is_warm:= as.numeric((mon==5) | (mon==6) | (mon==7) | (mon==8) | (mon==9))]
+df[, tcdc_const := TCDC_entire.atmosphere_38_35.75 >= 32]
+df[, hour_ls := as.numeric((hour<16))]
+df[, dswrf_const := DSWRF_surface_39_35.25 < 589]
+```
+
+With the new additions, a new model can be deployed.
+
+```{r}
+lm_base2 = lm(production ~ (trend + w_day + mon + as.factor(hour) + is_winter + is_warm + tcdc_const + hour_ls+ tcdc_const:dswrf_const), df)
+summary(lm_base2)
+```
+As it can be seen, adjusted R^2 values has increased significantly.
+
+```{r}
+df[,predicted := predict(lm_base2, df)]
+df[order(datetime, decreasing = T), .(predicted, production, datetime)]
+```
+
+```{r}
+df[date<'2021-12-25' & date>'2021-11-01', .(predicted, datetime)]
+```
+
+The model predicted negative production values for early hour values. This shows that the model can be improved by solving this issue. Unfortunately, due to time issues of the final exam I am going to apply an easier (yet debatable) method. We can convert negative production values into 0's, since it is impossible to produce negative quantity.
+
+```{r}
+preds = df[date<'2021-12-25' & date>'2021-11-01', .(predicted, datetime)]
+  
+preds[predicted<0, predicted:=0]
+preds
+```
+
+After this manipulation, we are asked to compare these predictions with two days before.
+
+```{r}
+act = df[date<'2021-12-23' & date>'2021-10-30', .(production, datetime)]
+act
+```
+
+```{r}
+comps = matrix(c(act$production, preds$predicted), ncol = 2)
+comps = data.frame(comps)
+colnames(comps) = c("Actual", "Predicted")
+head(comps, 50)
+```
+
+```{r}
+wmape(comps$Actual, comps$Predicted)
+
+```
+The wMAPE value is 0.5689755

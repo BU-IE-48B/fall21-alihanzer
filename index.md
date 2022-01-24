@@ -1,6 +1,6 @@
 # IE48B - Homework Journal of Alihan Zer
 
-## Homework 0
+## [Homework 0](/files/AlihanZer.md)
 
 This is the Homework 0 of IE48B. For more information regarding the author, please click [here.](/files/AlihanZer.md)
 
@@ -16,6 +16,12 @@ In this [homework](/files/IE48B-HW3.html), datasets [ArrowHead](http://www.times
 
 For the source code in RMD format, please click [here.](/files/IE48B-HW3.Rmd) 
 Please note that, this homework requires its users to create several distance matrices. This operation is necessary but it is time consuming. Due to that, dataset generation part is added but not run on RMD file.
+
+## [Final Homework - Prediction of Solar Power Plant Production](/files/ie48b_final.html)
+
+Prediction of solar power plant production can be found in [here.](/files/ie48b_final.html)
+
+For the source code in RMD format, please click [here.](/files/ie48b_final.Rmd)
 
 ## [Project - Imbalance prediction for electricity markets](/files/IE48B---Project.html)
 
