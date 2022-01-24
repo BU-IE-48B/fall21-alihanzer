@@ -17,3 +17,8 @@ In this [homework](/files/IE48B-HW3.html), datasets [ArrowHead](http://www.times
 For the source code in RMD format, please click [here.](/files/IE48B-HW3.Rmd) 
 Please note that, this homework requires its users to create several distance matrices. This operation is necessary but it is time consuming. Due to that, dataset generation part is added but not run on RMD file.
 
+## [Project - Imbalance prediction for electricity markets](/files/IE48B---Project.html)
+
+The project report can be found in [here.](/files/IE48B---Project.html)
+
+For the source code in RMD format, please click [here.](/files/IE48B - Project.Rmd). 
